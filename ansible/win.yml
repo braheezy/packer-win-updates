@@ -1,11 +1,13 @@
 ---
 - hosts: all
   vars:
-    virtio_win_iso_path: 'E:\\virtio-win\\'
+    virtio_win_iso_path: 'D:\\virtio-win\\'
     virtio_driver_directory: w10
 
   tasks:
     - import_tasks: virtio-win.yml
+      when: ansible_system_vendor == "QEMU"
+    - import_tasks: vdagent-win.yml
       when: ansible_system_vendor == "QEMU"
 
     - name: Enable Administrator account
@@ -24,23 +26,3 @@
       win_command: powercfg -h off
       changed_when: false
       when: ansible_distribution is search("Microsoft Windows 10")
-
-    - name: Install windows updates
-      win_updates:
-        category_names:
-          - Application
-          - Connectors
-          - CriticalUpdates
-          - DefinitionUpdates
-          - DeveloperKits
-          - FeaturePacks
-          - Guidance
-          - SecurityUpdates
-          - ServicePacks
-          - Tools
-          - UpdateRollups
-          - Updates
-        state: downloaded
-        # reboot: yes
-        # reboot_timeout: 10000
-      # register: windows_updates

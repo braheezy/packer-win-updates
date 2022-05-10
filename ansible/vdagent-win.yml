@@ -1,0 +1,20 @@
+---
+
+- name: Check services
+  win_service:
+    name: vdservice
+  register: vdservice_result
+
+- name: Install vdagent
+  block:
+    - name: Download vdagent
+      win_get_url:
+        url: "http://{{ packer_http_addr }}/spice-vdagent-x64-0.10.0.msi"
+        dest: "{{ ansible_env.TEMP }}\\spice-vdagent.msi"
+
+    - name: Install vdagent
+      win_package:
+        path: "{{ ansible_env.TEMP }}\\spice-vdagent.msi"
+        state: present
+
+  when: vdservice_result.state is not defined or vdservice_result.name is not defined
