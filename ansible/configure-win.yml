@@ -1,14 +1,8 @@
 ---
-- hosts: all
-  vars:
-    virtio_win_iso_path: 'D:\\virtio-win\\'
-    virtio_driver_directory: w10
+- name: Configure various Windows settings
+  hosts: all
 
   tasks:
-    - import_tasks: virtio-win.yml
-      when: ansible_system_vendor == "QEMU"
-    - import_tasks: vdagent-win.yml
-      when: ansible_system_vendor == "QEMU"
 
     - name: Enable Administrator account
       win_user:
