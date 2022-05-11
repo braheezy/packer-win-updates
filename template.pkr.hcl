@@ -1,11 +1,13 @@
-###############################################
-#        Stage 1
-###############################################
+#******************************************************************************
+/*
+         Stage 1
+*/
+#******************************************************************************
 ###############################################
 #        Sources
 # From ISO, create basic functioning image
 ###############################################
-source "qemu" "stage_1" {
+source "qemu" "basic" {
   iso_url           = var.iso_url
   iso_checksum      = "md5:${var.iso_checksum_md5}"
   communicator      = "winrm"
@@ -21,6 +23,7 @@ source "qemu" "stage_1" {
   boot_wait         = var.boot_wait
   boot_command      = var.boot_command
   shutdown_command  = var.shutdown_command
+  http_directory    = var.http_directory
   # QEMU specific stuff
   format            = "qcow2"
   accelerator       = "kvm"
@@ -28,7 +31,7 @@ source "qemu" "stage_1" {
   cd_files          = [var.virtio_win_dir]
 }
 
-source "virtualbox-iso" "stage_1" {
+source "virtualbox-iso" "basic" {
   iso_url              = var.iso_url
   iso_checksum         = "md5:${var.iso_checksum_md5}"
   communicator         = "winrm"
@@ -54,41 +57,81 @@ source "virtualbox-iso" "stage_1" {
 #        Builds
 ###############################################
 build {
-  sources = ["sources.virtualbox-iso.stage_1", "sources.qemu.stage_1"]
+  name = "stage_1"
+  sources = ["sources.virtualbox-iso.basic", "sources.qemu.basic"]
 
   ###################################
   #        Provisioners
   ###################################
-  # No provisioners run
+  provisioner "ansible" {
+    playbook_file = "ansible/virtio-win.yml"
+    user          = var.remote_username
+    use_proxy     = false
+    extra_arguments = [
+        "--extra-vars",
+        "ansible_winrm_server_cert_validation=ignore",
+        "--extra-vars",
+        "virtio_win_iso_path=E:/virtio-win",
+        "--extra-vars",
+        "virtio_driver_directory=w10"
+    ]
+  }
+
+  provisioner "ansible" {
+    playbook_file = "ansible/vdagent-win.yml"
+    user          = var.remote_username
+    use_proxy     = false
+    extra_arguments = [
+        "--extra-vars",
+        "ansible_winrm_server_cert_validation=ignore"
+    ]
+  }
 
   ###################################
   #        Post-processors
   ###################################
   post-processor "manifest" {
-    output = "stage-1-manifest.json"
+    output = "${build.name}-manifest.json"
   }
+  post-processor "checksum" {
+    output = "${build.name}.checksum"
 }
 
-###############################################
-#        Stage 2
-###############################################
+}
+#******************************************************************************
+/*
+         Stage 2
+*/
+#******************************************************************************
 locals {
-  # Read manifest
-  manifest_data = jsondecode(file("stage-1-manifest.json"))
+  /* The ternary statements handle Packer template errors when the 
+    files/variables aren't set.
 
-  # Set vars from manifest
-  iso_file = local.manifest_data.builds[0].files[0].name
+    These are also ordered in a specific way
+    because "The true and false result expressions must have consistent types" per Packer.
+  */
+
+  # Read manifest file into string
+  manifest_data_file = fileexists("stage_1-manifest.json") ? file("stage_1-manifest.json") : ""
+
+  # Turn the manifest into a JSON object, then peel off the array of build info
+  build_info = local.manifest_data_file != "" ? jsondecode(local.manifest_data_file).builds : []
+
+  # Traverse the JSON object for the iso location
+  iso_file = local.build_info != [] ? local.build_info[0].files[0].name : ""
+
+  # Read checksum
+  checksum = fileexists("stage_1.checksum") ? regex("^\\w*", file("stage_1.checksum")) : ""
 }
 ###############################################
 #        Sources
 # Take ISO from Stage 2 and customize.
 # Sysprep at end.
 ###############################################
-source "qemu" "stage_2" {
+source "qemu" "customize" {
   disk_image        = true
-  use_backing_file  = true
   iso_url           = local.iso_file
-  iso_checksum      = "md5:d93715bc139b222100b8fcb7fbe239de"
+  iso_checksum      = "md5:${local.checksum}"
   communicator      = "winrm"
   winrm_username    = var.remote_username
   winrm_password    = var.remote_password
@@ -99,21 +142,22 @@ source "qemu" "stage_2" {
   boot_wait         = var.boot_wait
   boot_command      = var.boot_command
   shutdown_command  = var.sysprep_shutdown_command
-  http_directory    = "materials/"
-  # QEMU specific stuff
-  cd_files          = [var.virtio_win_dir]
+  http_directory    = var.http_directory
+  floppy_files      = ["floppy/sysprep_shutdown.ps1",
+                       "floppy/sysprep_unattend.xml"]
 }
 ###############################################
 #        Builds
 ###############################################
 build {
-  sources = ["sources.qemu.stage_2"]
+  name = "stage_2"
+  sources = ["sources.qemu.customize"]
 
   ###################################
   #        Provisioners
   ###################################
   provisioner "ansible" {
-    playbook_file = "ansible/win.yml"
+    playbook_file = "ansible/configure-win.yml"
     user          = var.remote_username
     use_proxy     = false
     extra_arguments = [
@@ -127,6 +171,7 @@ build {
   ###################################
   post-processor "vagrant" {
     keep_input_artifact = true
+    output = "packer_test_{{.Provider}}.box"
   }
 }
 
@@ -213,4 +258,9 @@ variable "floppy_files" {
 variable "virtio_win_dir" {
   type    = string
   default = "/opt/virtio-win"
+}
+
+variable "http_directory" {
+  type = string
+  default = "materials/"
 }
