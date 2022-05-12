@@ -1,7 +1,7 @@
 # Thanks: https://github.com/ruzickap/ansible-role-virtio-win
 ---
 - name: Install Windows SPICE agent
-  hosts: default
+  hosts: all
 
   tasks:
 

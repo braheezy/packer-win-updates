@@ -7,7 +7,7 @@
 #        Sources
 # From ISO, create basic functioning image
 ###############################################
-source "qemu" "basic" {
+source "qemu" "base" {
   iso_url           = var.iso_url
   iso_checksum      = "md5:${var.iso_checksum_md5}"
   communicator      = "winrm"
@@ -31,7 +31,7 @@ source "qemu" "basic" {
   cd_files          = [var.virtio_win_dir]
 }
 
-source "virtualbox-iso" "basic" {
+source "virtualbox-iso" "base" {
   iso_url              = var.iso_url
   iso_checksum         = "md5:${var.iso_checksum_md5}"
   communicator         = "winrm"
@@ -58,7 +58,7 @@ source "virtualbox-iso" "basic" {
 ###############################################
 build {
   name = "stage_1"
-  sources = ["sources.virtualbox-iso.basic", "sources.qemu.basic"]
+  sources = ["sources.virtualbox-iso.base", "sources.qemu.base"]
 
   ###################################
   #        Provisioners
@@ -71,9 +71,12 @@ build {
         "--extra-vars",
         "ansible_winrm_server_cert_validation=ignore",
         "--extra-vars",
-        "virtio_win_iso_path=E:/virtio-win",
+        "virtio_win_iso_drive=E:",
         "--extra-vars",
-        "virtio_driver_directory=w10"
+        "virtio_win_iso_path=virtio-win",
+        "--extra-vars",
+        "virtio_driver_directory=w10",
+        "-vvv"
     ]
   }
 
@@ -119,28 +122,25 @@ locals {
 
   # Traverse the JSON object for the iso location
   iso_file = local.build_info != [] ? local.build_info[0].files[0].name : ""
-
-  # Read checksum
-  checksum = fileexists("stage_1.checksum") ? regex("^\\w*", file("stage_1.checksum")) : ""
 }
 ###############################################
 #        Sources
 # Take ISO from Stage 2 and customize.
 # Sysprep at end.
 ###############################################
-source "qemu" "customize" {
+source "qemu" "custom" {
   disk_image        = true
   iso_url           = local.iso_file
-  iso_checksum      = "md5:${local.checksum}"
+  iso_checksum      = "file:stage_1.checksum"
   communicator      = "winrm"
   winrm_username    = var.remote_username
   winrm_password    = var.remote_password
   winrm_timeout     = var.winrm_timeout
   winrm_insecure    = true
   winrm_use_ssl     = true
+  memory            = var.memory
+  cpus              = var.cpus
   headless          = var.headless
-  boot_wait         = var.boot_wait
-  boot_command      = var.boot_command
   shutdown_command  = var.sysprep_shutdown_command
   http_directory    = var.http_directory
   floppy_files      = ["floppy/sysprep_shutdown.ps1",
@@ -151,7 +151,7 @@ source "qemu" "customize" {
 ###############################################
 build {
   name = "stage_2"
-  sources = ["sources.qemu.customize"]
+  sources = ["sources.qemu.custom"]
 
   ###################################
   #        Provisioners
@@ -212,7 +212,7 @@ variable "shutdown_command" {
 variable "winrm_timeout" {
   type    = string
   # Set pretty high to account for a slow build computer.
-  default = "6h"
+  default = "1h"
 }
 
 variable "headless" {
