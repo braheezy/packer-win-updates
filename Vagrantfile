@@ -8,7 +8,7 @@ Vagrant.configure("2") do |config|
   config.winrm.transport = :ssl
   config.winrm.ssl_peer_verification = false
 
-  # Do we really need to set this?
+  # Do we really need to set this? It's the default
   config.winrm.password = "vagrant"
   config.winrm.username = "vagrant"
 
