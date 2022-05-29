@@ -51,7 +51,7 @@ source "virtualbox-iso" "base" {
   gfx_vram_size        = 128
   gfx_controller       = "vboxsvga"
   gfx_accelerate_3d    = true
-  format               = "ova"  
+  format               = "ova"
 }
 ###############################################
 #        Builds
@@ -75,8 +75,7 @@ build {
         "--extra-vars",
         "virtio_win_iso_path=virtio-win",
         "--extra-vars",
-        "virtio_driver_directory=w10",
-        "-vvv"
+        "virtio_driver_directory=w10"
     ]
   }
 
@@ -87,6 +86,22 @@ build {
     extra_arguments = [
         "--extra-vars",
         "ansible_winrm_server_cert_validation=ignore"
+    ]
+  }
+
+  provisioner "ansible" {
+    playbook_file = "ansible/virtiofs-win.yml"
+    user          = var.remote_username
+    use_proxy     = false
+    extra_arguments = [
+        "--extra-vars",
+        "ansible_winrm_server_cert_validation=ignore",
+        "--extra-vars",
+        "virtio_win_iso_drive=E:",
+        "--extra-vars",
+        "virtio_win_iso_path=virtio-win",
+        "--extra-vars",
+        "virtio_driver_directory=w10"
     ]
   }
 
@@ -107,7 +122,7 @@ build {
 */
 #******************************************************************************
 locals {
-  /* The ternary statements handle Packer template errors when the 
+  /* The ternary statements handle Packer template errors when the
     files/variables aren't set.
 
     These are also ordered in a specific way
@@ -141,7 +156,7 @@ source "qemu" "custom" {
   memory            = var.memory
   cpus              = var.cpus
   headless          = var.headless
-  shutdown_command  = var.sysprep_shutdown_command
+  shutdown_command  = var.shutdown_command
   http_directory    = var.http_directory
   floppy_files      = ["floppy/sysprep_shutdown.ps1",
                        "floppy/sysprep_unattend.xml"]
@@ -171,7 +186,7 @@ build {
   ###################################
   post-processor "vagrant" {
     keep_input_artifact = true
-    output = "packer_test_{{.Provider}}.box"
+    output = "win-pipeline-test.{{.Provider}}.box"
   }
 }
 

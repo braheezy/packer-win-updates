@@ -1,0 +1,49 @@
+---
+- name: Install Windows Virtiofs stuff
+  hosts: all
+
+  tasks:
+
+  - name: Check services
+    win_service:
+      name: WinFsp.Launcher
+    register: winfspservice_result
+
+  - name: Install winfsp
+    block:
+      - name: Download winfsp
+        win_get_url:
+          url: "http://{{ packer_http_addr }}/winfsp-1.10.22006.msi"
+          dest: "{{ ansible_env.TEMP }}\\winfsp.msi"
+
+      - name: Install winfsp
+        win_package:
+          path: "{{ ansible_env.TEMP }}\\winfsp.msi"
+          state: present
+
+    when: winfspservice_result.state is not defined or winfspservice_result.name is not defined
+
+  - name: Get list of all drivers
+    win_command: driverquery /V
+    changed_when: False
+    register: driver_list
+
+  - name: Install Virtiofs driver (virtiofs)
+    win_command: pnputil /install /add-driver {{ virtio_win_iso_drive }}\\{{ virtio_win_iso_path }}\\viofs\\{{ virtio_driver_directory }}\\{{ ansible_env.PROCESSOR_ARCHITECTURE | lower }}\\*.inf
+    when: driver_list.stdout is not search("virtiofs")
+
+  - name: Copy the virtiofs.exe
+    win_copy:
+      src: "{{ virtio_win_iso_drive }}\\{{ virtio_win_iso_path }}\\viofs\\{{ virtio_driver_directory }}\\{{ ansible_env.PROCESSOR_ARCHITECTURE | lower }}\\virtiofs.exe"
+      dest: C:\Windows\virtiofs.exe
+      remote_src: yes
+
+  - name: Create virtiofs service
+    win_service:
+      name: VirtioFsSvc
+      path: C:\Windows\virtiofs.exe
+      description: Enables Windows virtual machines to access directories on the host that have been shared with them using virtiofs.
+      display_name: Virtio FS Service
+      start_mode: auto
+      dependencies:
+        - WinFsp.Launcher

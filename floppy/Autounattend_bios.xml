@@ -157,6 +157,11 @@
                     <Order>5</Order>
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
+                    <CommandLine>cmd.exe /c powershell -File A:\disable-windows-update.ps1</CommandLine>
+                    <Description>Disable automatic Windows Updates at boot</Description>
+                    <Order>6</Order>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
                     <CommandLine>cmd.exe /c powershell -File A:\ConfigureRemotingForAnsible.ps1 -EnableCredSSP"</CommandLine>
                     <Description>Enable WinRM</Description>
                     <Order>99</Order>

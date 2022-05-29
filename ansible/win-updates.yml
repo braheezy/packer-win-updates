@@ -1,0 +1,121 @@
+---
+- name: Win Updates
+  hosts: all
+  become: yes
+  become_method: runas
+  become_user: Administrator
+
+  tasks:
+
+    # - name: set registry flag that shows updates for compatible anti-viruses
+    #   win_regedit:
+    #     path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\QualityCompat
+    #     name: cadca5fe-87d3-4b96-b7fb-a231484277cc
+    #     data: 0
+    #     type: dword
+
+    # - name: enable verbose logging (WUA seems to fail on some installs without this)
+    #   win_regedit:
+    #     path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Trace
+    #     name: '{{ item.name }}'
+    #     data: '{{ item.data }}'
+    #     type: dword
+    #   loop:
+    #   - name: Flags
+    #     data: 7
+    #   - name: Level
+    #     data: 4
+
+    # - name: Ensure Windows Update service is running
+    #   win_service:
+    #     name: wuauserv
+    #     start_mode: manual
+    #     state: started
+
+    # - name: download updates
+      # win_updates:
+      #   category_names:
+      #     - Application
+      #     - Connectors
+      #     - Critical Updates
+      #     - Definition Updates
+      #     - Developer Kits
+      #     - Feature Packs
+      #     - Guidance
+      #     - Security Updates
+      #     - Service Packs
+      #     - Tools
+      #     - Update Rollups
+      #     - Updates
+      #   state: downloaded
+      #   log_path: '{{ ansible_env.TEMP }}\update_download.log'
+
+    - name: Collect update .cab files
+      win_find:
+        paths: C:\Windows\SoftwareDistribution\Download
+        recurse: yes
+        get_checksum: no
+        use_regex: yes
+        # Look for any files that have 'KB' in the name. Must end with .cab.
+        # Don't include .xml.cab files.
+        patterns: .*KB.*(?<!\.xml)\.cab
+      register: update_files
+
+    - name: debug
+      debug:
+        var: update_files
+
+    - name: Ensure .cab staging location exists
+      win_file:
+        path: '{{ ansible_env.TEMP }}\Updates'
+        state: directory
+
+    - name: Copy .cab files to staging location
+      win_copy:
+        src: '{{ item.path }}'
+        dest: '{{ ansible_env.TEMP }}\Updates\'
+        remote_src: yes
+      loop: "{{ update_files.files }}"
+      loop_control:
+        label: "{{ item.filename }}"
+
+    - name: Package .cab files (.wim)
+      win_command: Dism /Capture-Image /ImageFile:{{ ansible_env.TEMP }}\updates.wim /CaptureDir:{{ ansible_env.TEMP }}\Updates /Name:WinUpdates
+
+    - name: Package .cab files (.zip)
+      win_shell: Compress-Archive -Path {{ ansible_env.TEMP }}\Updates\* -DestinationPath {{ ansible_env.TEMP }}\updates.zip
+
+    - name: Install updates locally
+      win_updates:
+        category_names:
+          - Application
+          - Connectors
+          - Critical Updates
+          - Definition Updates
+          - Developer Kits
+          - Feature Packs
+          - Guidance
+          - Security Updates
+          - Service Packs
+          - Tools
+          - Update Rollups
+          - Updates
+        state: installed
+        log_path: '{{ ansible_env.TEMP }}\update_install.log'
+
+    - name: Ensure Windows Update service is stopped
+      win_service:
+        name: wuauserv
+        state: stopped
+
+    - name: remove verbose Windows Update logging
+      win_regedit:
+        path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Trace
+        state: absent
+        delete_key: yes
+
+    - name: clear update log after it blew up from the above
+      win_file:
+        path: C:\Windows\WindowsUpdate.log
+        state: absent
+      ignore_errors: yes

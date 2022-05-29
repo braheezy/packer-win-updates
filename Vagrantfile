@@ -1,6 +1,6 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "win-test"
-  config.vm.box_url = "packer_test_libvirt.box"
+  config.vm.box_url = "win-pipeline-test.libvirt.box"
   config.vm.boot_timeout = 1200
 
   config.vm.guest = :windows
@@ -12,19 +12,24 @@ Vagrant.configure("2") do |config|
   config.winrm.password = "vagrant"
   config.winrm.username = "vagrant"
 
-  # Do we really need to set this?
-  # config.vm.network :forwarded_port, guest: 5986, host: 5986, id: "winrm-ssl", auto_correct:true
-  # config.vm.network :forwarded_port, guest: 5985, host: 5985, id: "winrm", auto_correct:true
+  config.vm.synced_folder "materials", "/vagrant", disabled: false
 
-  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.define "man-up"
+  config.vm.define "auto-up"
 
-  config.vm.provider :libvirt do |l|
+  config.vm.provider :libvirt do |l, override|
     l.driver = "kvm"
     l.cpus = 2
+    l.memory = 4096
     l.disk_bus = "virtio"
     l.graphics_type = "spice"
     l.video_type = "qxl"
     l.machine_type = "pc-q35-6.1"
+
+    l.memorybacking :access, :mode => "shared"
+    override.vm.synced_folder "./scripts", "/scripts", disabled: false, type: "virtiofs"
+
+    l.storage :file, :device => :cdrom, :bus => "sata", :path => '/home/braheezy/windows-pipeline/virtio-win-0.1.217.iso'
 
     # For QXL graphics comm to host
     l.channel :type => 'spicevmc', :target_name => 'com.redhat.spice.0', :target_type => 'virtio'
@@ -37,4 +42,5 @@ Vagrant.configure("2") do |config|
     l.hyperv_feature :name => 'vapic',   :state => 'on'
     l.hyperv_feature :name => 'vpindex', :state => 'on'
   end
+
 end

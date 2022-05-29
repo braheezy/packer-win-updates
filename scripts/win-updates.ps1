@@ -36,11 +36,22 @@ Cmdlet: Set-WUSettings
 Cmdlet: Update-WUModule
 #>
 
+# https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/secu/2022/05/windows10.0-kb5013942-arm64_118cc464b33952a31000a186d9c4174184b02087.msu
+
 # Install PSWindowsUpdates module
-Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-Install-Module -Name PSWindowsUpdate -Force
+#Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+#Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+#Install-Module -Name PSWindowsUpdate -Force
+
 # Use module to get list of KBs required
+$UpdateList = Get-WindowsUpdate
+$KBs = ($UpdateList | Select-Object -ExpandProperty KB | Out-String -Stream)
+Write-Output $KBs
+foreach ($kb in $KBs) {
+    $id = $kb.Trim('KB')
+    Write-Output "id: $id"
+    Get-WUOfflineMSU -KBArticleID $id -Destination C:\Temp
+}
 <#
 Get-WindowsUpdate to get a list
     Filter to avoid downnloads over 10G
